@@ -33,5 +33,5 @@
   
   l) ROC Curve plot
   
- m) several visualizations (US map:candidate frequency by state, GLM diagnostics, etc.) 
+  m) several visualizations (US map:candidate frequency by state, GLM diagnostics, etc.) 
 

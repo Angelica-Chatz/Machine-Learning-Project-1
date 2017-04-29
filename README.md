@@ -9,7 +9,9 @@
 - Predict the winner of the elections and explain the result based on the population attributes that affected it more
 - Steps performed in this project: 
   a) Feature engineering
+  
   b) Descriptive Statistics Analysis
+  
   c) Missing Values handling
   d) Outlier detection
   e) Correlation Check

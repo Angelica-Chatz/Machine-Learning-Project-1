@@ -1,0 +1,184 @@
+---
+title: "Logistic Regression US Elections dataset"
+author: "Chatzimoschou Angeliki"
+date: "18/04/2016"
+output: html_document
+---
+
+
+
+install.packages("psych")
+install.packages("Amelia")
+install.packages("ggplot2")
+install.packages("maps")
+install.packages("corrplot")
+install.packages("caret")
+install.packages("ResourceSelection")
+install.packages("pROC")
+```{r}
+counties <- read.csv2("C:/Users/Angelica/Desktop/project I/counties.xls - Copy.csv")
+head(counties)
+View(counties)
+
+#create regions by grouping states
+for (i in 1: nrow(counties)) {
+  if (counties$state [i] == "louisiana" | counties$state [i] == "arkansas" | counties$state[i]=="mississippi" | counties$state [i] == "tennessee" | counties$state [i] == "alabama" | counties$state [i] == "kentucky" | counties$state [i] == "georgia" | counties$state [i] == "florida" | counties$state [i] == "south carolina" | counties$state [i] == "north carolina" | counties$state[i]=="virginia" | counties$state [i] == "west virginia" | counties$state[i]=="district of columbia" ){
+    counties$area [i] <- 1 #Southeast
+  } else if (counties$state [i] == "maryland" | counties$state [i] =="delaware" | counties$state [i] =="new jersey" | counties$state [i] =="connecticut" | counties$state [i] =="pennsylvania" | counties$state [i] =="new york" | counties$state [i] =="massachusetts" | counties$state [i] =="new hampshire" | counties$state [i] =="vermont" | counties$state [i] =="maine" | counties$state [i] =="rhode island"){
+    counties$area [i] <- 2 #Northeast
+  } else if ( counties$state [i] =="new mexico" | counties$state [i] =="oklahoma" | counties$state [i] =="texas" ){
+    counties$area [i] <- 3 #Southwest
+  } else if (counties$state [i] == "california" | counties$state [i] =="utah" | counties$state [i] =="alaska" | counties$state [i] =="colorado" | counties$state [i] =="wyoming" | counties$state [i] =="idaho" | counties$state [i] =="montana" | counties$state [i] =="washington" | counties$state [i] =="oregon" | counties$state [i] =="hawaii" ){
+    counties$area [i] <- 4 #West
+  } else {
+    counties$area [i] <- 5 #Midwest
+  }
+}
+counties$area<-as.factor(counties$area)
+View(counties)
+
+
+
+#descriptives
+library(psych)
+
+str(counties)
+describe(counties)
+
+#afairw rows me NAs
+sapply(counties,function(x) sum(is.na(x)))
+
+library(Amelia)
+missmap(counties, main = "Missing values vs observed")
+
+counties<-na.omit(counties)
+
+sum(is.na(counties))
+
+# check unique values
+sapply(counties, function(x) length(unique(x)))
+
+# US MAP elections: republican frequency by state
+library(ggplot2)
+library(maps)
+
+all_states<-map_data("state")
+head(all_states)
+
+counties$region <- counties$state
+Total <- merge(all_states, counties, by="region")
+head(Total)
+View(counties)
+
+g <- ggplot()
+g <- g + geom_polygon(data=Total, aes(x=long, y=lat, group = group, fill=Total$republican),colour="black") + scale_fill_continuous(low = "red", high = "blue", guide="colorbar")
+g1 <- g + theme_bw()  + labs(fill = "Republican Frequency",title = "Republican State Frequency", x="", y="")
+g1 + scale_y_continuous(breaks=c()) + scale_x_continuous(breaks=c()) + theme(panel.border =  element_blank())
+
+#afairw tis 3 categoricals
+counties <- counties[,-c(1:2,19)]
+
+#create 'older' variable
+counties$older<-counties$age6574 + counties$age75
+
+# create log.pop.density & log.pop
+counties$log.pop.density<-log(counties$pop.density+1, 10)
+counties$log.pop<-log(counties$pop+1, 10)
+
+#create response var
+counties$REP <- ifelse((counties$republican > counties$democrat),1,0)
+counties$REP<-as.factor(counties$REP)
+View(counties)
+
+# omit vars age6574, age75, pop.density, dem,rep+perot
+
+counties$pop.density<-NULL
+counties$age6574<-NULL
+counties$age75<-NULL
+counties$democrat<-NULL
+counties$republican<-NULL
+counties$pop<-NULL
+View(counties)
+
+# boxplots
+boxplot(counties[,1:6],main="1-6",col='red')
+boxplot(counties[,7:13],main="7-13",col='red')
+
+#check correlation me Spearman logw non-linearity
+library(corrplot)
+
+corrplot(cor(counties[,-c(10,14)],method = "pearson"), method="num", main='Pearson correlation Test')
+# white/black, pop/log.pop.density
+
+
+
+#create training-test set
+library(caret)
+counties_sampling_vector <- createDataPartition(counties$REP, p = 0.8, list = FALSE)
+
+counties_train <- counties[counties_sampling_vector,]
+
+counties_test <- counties[-counties_sampling_vector,]
+
+
+
+#################### modeling kai auto variable selection
+options(scipen=999)
+full<-glm(REP~.,family = binomial,data = counties_train) 
+
+null<-glm(REP~1,family=binomial,data = counties_train)
+
+step(null, scope=list(lower=null, upper=full), direction="forward")
+step(full, data=counties_train, direction="backward")
+step(null, scope = list(upper=full), data=counties_train, direction="both")
+
+
+best_fit1 <- glm(REP ~ Perot + white + pop.change + farm + turnout + area +
+    income + log.pop.density + black,family = binomial,data = counties_train) 
+ 
+summary(best_fit1)  
+
+best_fit2 <- glm(REP ~ Perot + white + pop.change + farm + turnout + area +
+    income + log.pop.density,family = binomial,data = counties_train) 
+ 
+summary(best_fit2)  
+
+
+#log-odds ratio
+exp(cbind(OR = coef(best_fit2), confint(best_fit2)))
+
+# log-reg plots
+plot(best_fit2)
+
+# difference between null deviance and model deviance
+with(best_fit2, null.deviance - deviance)
+
+# DoF
+with(best_fit2, df.null - df.residual)
+
+# model p-value
+with(best_fit2, pchisq(null.deviance - deviance, df.null - df.residual, lower.tail = FALSE))
+
+#pseudo R_squared
+(pseudo_R_squared <- with(best_fit2, 1 - deviance / null.deviance))
+
+# Hosmer Lemeshow test
+library(ResourceSelection)
+hoslem.test(counties_train$REP, fitted(best_fit2))
+
+# predictions
+fitted.results <- predict(best_fit2,newdata=counties_test,type='response')
+fitted.results <- ifelse(fitted.results > 0.5,1,0)
+Accuracy<-(confusion_matrix[2,2]+confusion_matrix[1,1])/sum(confusion_matrix)
+paste('Accuracy',Accuracy)
+
+(confusion_matrix <- table(predicted=fitted.results,observed=counties_test$REP))
+
+# ROC curve kai AUC
+library(pROC)
+
+roc1 <- roc(counties_test$REP,fitted.results)
+(auc <- roc1$auc)
+
+plot(roc1,col="red",main="Counties_Test ROC",legacy.axes=TRUE)
+```

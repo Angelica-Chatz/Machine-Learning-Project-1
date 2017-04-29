@@ -1,8 +1,8 @@
 ## Machine-Learning-Project-1
 # Assignment using: 
 - Windows 10
-- R Studio
-- R 3.3
+- R Studio 0.99
+- R 3.2.3
 
 # Tasks:
 - Dataset about the 1992 US Elections (demographics and voting patterns)
